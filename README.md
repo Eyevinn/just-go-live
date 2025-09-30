@@ -2,6 +2,16 @@
 
 A simple web application for quick live broadcasting using Eyevinn Live Encoding in Open Source Cloud.
 
+## Screenshots
+
+### Main Interface
+![Main Interface](screenshot1.png)
+*One-click live stream setup with the big red "GO LIVE" button*
+
+### Viewer Page
+![Viewer Page](screenshot2.png)
+*HLS video player for audience with real-time status indicators*
+
 ## Features
 
 - **One-Click Live Setup**: Big red "GO LIVE" button that instantly creates a live encoding instance
