@@ -2,6 +2,14 @@
 
 A simple web application for quick live broadcasting using Eyevinn Live Encoding in Open Source Cloud.
 
+## 🚀 Available as a Service
+
+**Just Go Live** is now available as a ready-to-use service in [Open Source Cloud](https://app.osaas.io/browse/eyevinn-just-go-live)! 
+
+Deploy instantly without any setup - just click and start streaming. Perfect for quick live broadcasts, demos, or testing.
+
+[**Launch Just Go Live on OSaaS →**](https://app.osaas.io/browse/eyevinn-just-go-live)
+
 ## Screenshots
 
 ### Main Interface
