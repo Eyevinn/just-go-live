@@ -8,9 +8,9 @@ A simple web application for quick live broadcasting using Eyevinn Live Encoding
 ![Main Interface](screenshot1.png)
 *One-click live stream setup with the big red "GO LIVE" button*
 
-### Viewer Page
-![Viewer Page](screenshot2.png)
-*HLS video player for audience with real-time status indicators*
+### Live Stream Setup Complete
+![Live Stream Setup Complete](screenshot2.png)
+*After pressing "GO LIVE" - shows RTMP URL for streaming software and viewer URL for sharing*
 
 ## Features
 
