@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  just-go-live:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - OSC_ACCESS_TOKEN=${OSC_ACCESS_TOKEN}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
+      - DATA_DIR=/userdata
+    volumes:
+      - userdata:/userdata
+    restart: unless-stopped
+
+volumes:
+  userdata:

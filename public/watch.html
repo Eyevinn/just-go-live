@@ -1,0 +1,347 @@
+<!--
+Just Go Live - Simple web app for quick live broadcasting
+
+Copyright (c) 2025 Eyevinn Technology AB
+Licensed under the MIT License (see LICENSE file)
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stream - Just Go Live</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .video-container {
+            background: #000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        .status {
+            padding: 15px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status.offline {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
+        .status.live {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.offline {
+            background: #f44336;
+        }
+
+        .status-indicator.live {
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            background: #2196f3;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #1976d2;
+        }
+
+        .btn.refresh {
+            background: #4caf50;
+        }
+
+        .btn.refresh:hover {
+            background: #45a049;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
+    <link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet">
+</head>
+<body>
+    <div class="header">
+        <h1>🔴 Live Stream</h1>
+        <p>Powered by Just Go Live</p>
+    </div>
+
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading stream information...</p>
+        </div>
+
+        <div id="content" style="display: none;">
+            <div id="status" class="status">
+                <span id="statusIndicator" class="status-indicator"></span>
+                <span id="statusText">Checking stream status...</span>
+            </div>
+
+            <div id="error" class="error" style="display: none;">
+                <p id="errorText"></p>
+            </div>
+
+            <div class="video-container">
+                <video
+                    id="player"
+                    class="video-js video-player"
+                    controls
+                    preload="auto"
+                    data-setup='{}'>
+                    <source id="hlsSource" src="" type="application/x-mpegURL">
+                    <p class="vjs-no-js">
+                        To view this video please enable JavaScript, and consider upgrading to a web browser that
+                        <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>.
+                    </p>
+                </video>
+            </div>
+
+            <div class="controls">
+                <button class="btn refresh" onclick="refreshStream()">🔄 Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let player;
+        let streamId;
+        let streamInfo;
+        let statusCheckInterval;
+
+        function getStreamIdFromUrl() {
+            const path = window.location.pathname;
+            const matches = path.match(/\/watch\/(.+)/);
+            return matches ? matches[1] : null;
+        }
+
+        async function loadStreamInfo() {
+            streamId = getStreamIdFromUrl();
+            
+            if (!streamId) {
+                showError('Invalid stream URL');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/stream/${streamId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    streamInfo = data.stream;
+                    setupPlayer();
+                    updateStatus();
+                    startStatusChecking();
+                } else {
+                    showError('Stream not found');
+                }
+            } catch (error) {
+                showError('Failed to load stream information: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            }
+        }
+
+        function setupPlayer() {
+            if (player) {
+                player.dispose();
+            }
+
+            player = videojs('player', {
+                fluid: true,
+                responsive: true,
+                liveui: true,
+                playsinline: true
+            });
+
+            if (streamInfo.hlsUrl) {
+                document.getElementById('hlsSource').src = streamInfo.hlsUrl;
+                player.src({
+                    src: streamInfo.hlsUrl,
+                    type: 'application/x-mpegURL'
+                });
+            }
+
+            player.ready(() => {
+                console.log('Player ready');
+            });
+
+            player.on('error', () => {
+                console.log('Player error:', player.error());
+                updateStatus('offline');
+            });
+
+            player.on('loadeddata', () => {
+                updateStatus('live');
+            });
+        }
+
+        function updateStatus(forceStatus = null) {
+            const statusDiv = document.getElementById('status');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+
+            let status = forceStatus || streamInfo.status;
+            
+            if (status === 'encoding' || status === 'live') {
+                statusDiv.className = 'status live';
+                statusIndicator.className = 'status-indicator live';
+                statusText.textContent = '🔴 LIVE - Stream is active';
+            } else {
+                statusDiv.className = 'status offline';
+                statusIndicator.className = 'status-indicator offline';
+                statusText.textContent = '⭕ OFFLINE - Waiting for stream to start';
+            }
+        }
+
+        function startStatusChecking() {
+            statusCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/stream/${streamId}`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        streamInfo = data.stream;
+                        updateStatus();
+                    }
+                } catch (error) {
+                    console.error('Status check failed:', error);
+                }
+            }, 10000); // Check every 10 seconds
+        }
+
+        function refreshStream() {
+            if (player) {
+                player.load();
+            }
+            updateStatus();
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', loadStreamInfo);
+
+        // Cleanup when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            if (player) {
+                player.dispose();
+            }
+        });
+    </script>
+</body>
+</html>

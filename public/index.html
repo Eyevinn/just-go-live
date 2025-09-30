@@ -1,0 +1,329 @@
+<!--
+Just Go Live - Simple web app for quick live broadcasting
+
+Copyright (c) 2025 Eyevinn Technology AB
+Licensed under the MIT License (see LICENSE file)
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Just Go Live</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 600px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+
+        .go-live-btn {
+            background: linear-gradient(45deg, #ff4757, #ff6b7a);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            padding: 30px 60px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(255, 71, 87, 0.3);
+            min-width: 300px;
+        }
+
+        .go-live-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255, 71, 87, 0.4);
+        }
+
+        .go-live-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .go-live-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            text-align: left;
+        }
+
+        .result h3 {
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .url-group {
+            margin-bottom: 20px;
+        }
+
+        .url-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .copy-btn.copied {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .control-btn.stop {
+            background: rgba(244, 67, 54, 0.2);
+            border-color: rgba(244, 67, 54, 0.4);
+        }
+
+        .control-btn.stop:hover {
+            background: rgba(244, 67, 54, 0.3);
+            border-color: rgba(244, 67, 54, 0.6);
+        }
+
+        .watch-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .watch-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Just Go Live</h1>
+        <p class="subtitle">Click the button below to instantly set up your live stream</p>
+        
+        <button id="goLiveBtn" class="go-live-btn">🔴 GO LIVE</button>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Setting up your live stream...</p>
+        </div>
+
+        <div id="result" class="result">
+            <h3>✅ Live Stream Ready!</h3>
+            <p style="margin-bottom: 20px; opacity: 0.9;">Your encoder is starting up and will be ready to accept streams shortly.</p>
+            
+            <div class="url-group">
+                <label>RTMP URL (paste this into OBS or your streaming software):</label>
+                <input type="text" id="rtmpUrl" class="url-input" readonly>
+                <button onclick="copyToClipboard('rtmpUrl')" class="copy-btn">Copy RTMP URL</button>
+            </div>
+
+            <div class="url-group">
+                <label>Viewer URL (share this with your audience):</label>
+                <input type="text" id="viewerUrl" class="url-input" readonly>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <button onclick="copyToClipboard('viewerUrl')" class="copy-btn">Copy Viewer URL</button>
+                    <button onclick="watchStream()" class="watch-btn">▶️ Watch Stream</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="stopEncoderBtn" class="control-btn stop">Stop Encoder</button>
+                <button onclick="window.location.reload()" class="control-btn">Create New Stream</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStreamId = null;
+
+        document.getElementById('goLiveBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('goLiveBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+
+            btn.disabled = true;
+            loading.style.display = 'block';
+            result.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/go-live', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentStreamId = data.streamId;
+                    document.getElementById('rtmpUrl').value = data.rtmpUrl;
+                    document.getElementById('viewerUrl').value = data.viewerUrl;
+                    
+                    loading.style.display = 'none';
+                    result.style.display = 'block';
+                } else {
+                    throw new Error(data.error || 'Failed to create live stream');
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                alert('Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        function watchStream() {
+            if (currentStreamId) {
+                window.open(`/watch/${currentStreamId}`, '_blank');
+            }
+        }
+
+        document.getElementById('stopEncoderBtn').addEventListener('click', async () => {
+            if (!currentStreamId) return;
+            
+            try {
+                const response = await fetch(`/api/stop-encoder/${currentStreamId}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Encoder stopped.');
+                } else {
+                    alert('Error stopping encoder: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            element.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            
+            const btn = element.nextElementSibling;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.classList.remove('copied');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
