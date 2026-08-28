@@ -120,8 +120,14 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
 - `POST /api/go-live` - Create new live stream instance
 - `POST /api/start-encoder/:streamId` - Start the encoder
 - `POST /api/stop-encoder/:streamId` - Stop the encoder  
-- `GET /api/stream/:streamId` - Get stream information
+- `GET /api/stream/:streamId` - Playback information for a stream: `streamId`, `hlsUrl`, `status`
 - `GET /watch/:streamId` - Viewer page for stream
+
+The viewer link is public, and `GET /api/stream/:streamId` is the request the viewer
+page makes, so it is reachable without authentication. Its response is built from a
+fixed allowlist and must stay that way: the stream key, the ingest URL and any access
+token belong to the broadcaster, not the audience. Do not return the stored stream
+object from it.
 
 ## Environment Variables
 
