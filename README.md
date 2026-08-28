@@ -127,7 +127,9 @@ cost.
 - `POST /api/start-encoder/:streamId` - Start the encoder
 - `POST /api/stop-encoder/:streamId` - Stop the encoder  
 - `GET /api/stream/:streamId` - Playback information for a stream: `streamId`, `hlsUrl`, `status`
-- `DELETE /api/stream/:streamId` - Remove the Live Encoding instance created for the stream
+- `DELETE /api/stream/:streamId` - Remove the Live Encoding instance created for the stream.
+  Requires the `x-manage-token` header with the `manageToken` from the go-live response,
+  because the stream id itself is public and the removal cannot be undone
 - `GET /watch/:streamId` - Viewer page for stream
 
 The viewer link is public, and `GET /api/stream/:streamId` is the request the viewer

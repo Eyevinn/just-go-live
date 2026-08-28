@@ -18,6 +18,8 @@ import {
   removeEyevinnLiveEncodingInstance
 } from '@osaas/client-services';
 import { publicStreamView } from './lib/public-stream-view.js';
+import { classifyRemovalError } from './lib/removal-outcome.js';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,9 +154,34 @@ async function validateAndRecreateInstances() {
   await saveStreams();
 }
 
+// A secret the broadcaster's page holds and the audience does not.
+//
+// Every other stream route is keyed on streamId alone, and streamId is the last
+// segment of the viewer link, which is handed to the audience on purpose. That is
+// survivable for the encoder routes, which are reversible. It is not survivable
+// for removal: one DELETE from anyone holding a viewer link would destroy the
+// encoder mid-broadcast, and the RTMP endpoint and stream key do not come back.
+//
+// So DELETE requires this token, which is returned only in the go-live response.
+// The pre-existing start-encoder and stop-encoder routes are the same class of
+// exposure and are deliberately left alone here, so this stays one change.
+function newManageToken() {
+  return randomBytes(32).toString('hex');
+}
+
+function manageTokenMatches(expected, provided) {
+  if (typeof expected !== 'string' || typeof provided !== 'string') return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(provided);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 // Check if there's an available instance to reuse
 function findAvailableInstance() {
   for (const [streamId, streamInfo] of activeStreams.entries()) {
+    // 'remove-failed' is deliberately not reusable: we do not know whether the
+    // instance behind it is alive.
     if (streamInfo.status === 'created' || streamInfo.status === 'stopped') {
       return { streamId, streamInfo };
     }
@@ -261,11 +288,18 @@ app.post('/api/go-live', async (req, res) => {
       
       await saveStreams();
       
+      // Streams created before manage tokens existed do not have one.
+      if (!streamInfo.manageToken) {
+        streamInfo.manageToken = newManageToken();
+      }
+
       return res.json({
         success: true,
         streamId,
         rtmpUrl: streamInfo.rtmpUrl,
-        viewerUrl
+        viewerUrl,
+        instanceName: streamInfo.instanceName,
+        manageToken: streamInfo.manageToken
       });
     }
 
@@ -318,6 +352,7 @@ app.post('/api/go-live', async (req, res) => {
       serviceUrl,
       status: 'created',
       createdAt: new Date(),
+      manageToken: newManageToken(),
       serviceAccessToken: sat,
       serviceAccessTokenCreated: new Date()
     };
@@ -333,7 +368,9 @@ app.post('/api/go-live', async (req, res) => {
       success: true,
       streamId,
       rtmpUrl,
-      viewerUrl
+      viewerUrl,
+      instanceName,
+      manageToken: streamInfo.manageToken
     });
 
   } catch (error) {
@@ -493,42 +530,72 @@ app.get('/api/stream/:streamId', (req, res) => {
 // way to stop the cost was to find the instance in Open Source Cloud and delete
 // it by hand (issue #3).
 //
-// The instance is removed directly rather than stopped first. Removing it ends
-// the encoder anyway, and a failed stop should not be able to block the removal.
+// Requires the manage token from the go-live response, because streamId alone is
+// public and this operation cannot be undone.
 app.delete('/api/stream/:streamId', async (req, res) => {
   const { streamId } = req.params;
   const streamInfo = activeStreams.get(streamId);
 
   if (!streamInfo) {
-    return res.status(404).json({ success: false, error: 'Stream not found' });
-  }
-
-  try {
-    const { available } = await checkInstanceAvailability(streamInfo.instanceName);
-
-    if (available) {
-      const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
-      await removeEyevinnLiveEncodingInstance(ctx, streamInfo.instanceName);
-      console.log(`Removed instance ${streamInfo.instanceName}`);
-    } else {
-      console.log(`Instance ${streamInfo.instanceName} was already gone`);
-    }
-
-    activeStreams.delete(streamId);
-    await saveStreams();
-
-    res.json({ success: true, instanceName: streamInfo.instanceName });
-  } catch (error) {
-    // The local record is kept on purpose. It is the only thing left that names
-    // an instance which is still running and still being charged for, and
-    // dropping it here would hide the exact cost this endpoint exists to end.
-    console.error(`Error removing instance ${streamInfo.instanceName}:`, error);
-    res.status(500).json({
+    // No instanceName to give: the record that held it is what is missing. Say
+    // so plainly rather than letting the caller print an empty name, because a
+    // missing record can also mean an instance nobody is tracking any more.
+    return res.status(404).json({
       success: false,
-      error: error.message,
-      instanceName: streamInfo.instanceName
+      error:
+        'Stream not found. Either it was already removed, or this server lost the record ' +
+        'while the instance was still running. Check the eyevinn-live-encoding service in ' +
+        'Open Source Cloud for an instance that should not be there.',
+      instanceName: null
     });
   }
+
+  if (!manageTokenMatches(streamInfo.manageToken, req.get('x-manage-token'))) {
+    return res.status(403).json({
+      success: false,
+      error: 'Removing a stream requires the manage token from the go-live response.',
+      instanceName: null
+    });
+  }
+
+  let outcome;
+  try {
+    const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
+    await removeEyevinnLiveEncodingInstance(ctx, streamInfo.instanceName);
+    outcome = 'removed';
+    console.log(`Removed instance ${streamInfo.instanceName}`);
+  } catch (error) {
+    if (classifyRemovalError(error) === 'already-gone') {
+      outcome = 'already-gone';
+      console.warn(`Instance ${streamInfo.instanceName} was already gone`);
+    } else {
+      // The local record is kept on purpose. It is the only thing left that
+      // names an instance which may still be running and still being charged
+      // for, and dropping it here would hide the exact cost this endpoint
+      // exists to end. Error level, not info: an operator greps for this.
+      console.error(
+        `Failed to remove instance ${streamInfo.instanceName} ` +
+        `(httpCode=${error && error.httpCode ? error.httpCode : 'none'}). ` +
+        `It may still be running and billing.`,
+        error
+      );
+      streamInfo.status = 'remove-failed';
+      await saveStreams();
+      return res.status(500).json({
+        success: false,
+        outcome: 'unknown',
+        error: error.message,
+        instanceName: streamInfo.instanceName
+      });
+    }
+  }
+
+  activeStreams.delete(streamId);
+  await saveStreams();
+
+  // Say which of the two happened. "I issued a delete and it succeeded" and
+  // "it was not there" are different facts and the page words them differently.
+  res.json({ success: true, outcome, instanceName: streamInfo.instanceName });
 });
 
 app.get('/watch/:streamId', (req, res) => {
