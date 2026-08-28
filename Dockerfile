@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Create app directory
 WORKDIR /app
@@ -10,20 +10,15 @@ RUN mkdir -p /userdata && chmod 755 /userdata
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy application code
 COPY . .
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# Change ownership of app and userdata directories
-RUN chown -R nodejs:nodejs /app /userdata
-
-# Switch to non-root user
-USER nodejs
+# Use the unprivileged user the base image already ships, rather than creating
+# one at a hard-coded uid that a future base image may have taken.
+RUN chown -R node:node /app /userdata
+USER node
 
 # Expose port
 EXPOSE 3000
@@ -33,5 +28,6 @@ ENV NODE_ENV=production
 ENV DATA_DIR=/userdata
 ENV PORT=3000
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application. node directly, not npm: npm as PID 1 does not forward
+# SIGTERM to the server, so the container only stops on the kill timeout.
+CMD ["node", "server.js"]
