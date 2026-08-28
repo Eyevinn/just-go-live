@@ -203,6 +203,17 @@ Licensed under the MIT License (see LICENSE file)
             background: rgba(255, 255, 255, 0.25);
             border-color: rgba(255, 255, 255, 0.5);
         }
+
+        .cost-note {
+            margin-bottom: 20px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.4);
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -219,7 +230,8 @@ Licensed under the MIT License (see LICENSE file)
 
         <div id="result" class="result">
             <h3>✅ Live Stream Ready!</h3>
-            <p style="margin-bottom: 20px; opacity: 0.9;">Your encoder is starting up and will be ready to accept streams shortly.</p>
+            <p style="margin-bottom: 12px; opacity: 0.9;">Your encoder is starting up and will be ready to accept streams shortly.</p>
+            <p class="cost-note">This created a Live Encoding instance in your Open Source Cloud account. It keeps running, and costing, until it is removed. Stopping the encoder is not enough. Use <strong>End stream and remove instance</strong> below when you are finished.</p>
             
             <div class="url-group">
                 <label>RTMP URL (paste this into OBS or your streaming software):</label>
@@ -237,7 +249,8 @@ Licensed under the MIT License (see LICENSE file)
             </div>
 
             <div class="controls">
-                <button id="stopEncoderBtn" class="control-btn stop">Stop Encoder</button>
+                <button id="stopEncoderBtn" class="control-btn">Stop Encoder</button>
+                <button id="removeInstanceBtn" class="control-btn stop">End stream and remove instance</button>
                 <button onclick="window.location.reload()" class="control-btn">Create New Stream</button>
             </div>
         </div>
@@ -305,6 +318,33 @@ Licensed under the MIT License (see LICENSE file)
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
+            }
+        });
+
+        document.getElementById('removeInstanceBtn').addEventListener('click', async () => {
+            if (!currentStreamId) return;
+
+            const btn = document.getElementById('removeInstanceBtn');
+            if (!confirm('This removes the Live Encoding instance from your account and ends the stream. Continue?')) return;
+
+            btn.disabled = true;
+            try {
+                const response = await fetch(`/api/stream/${currentStreamId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Instance removed. It is no longer costing anything.');
+                    window.location.reload();
+                } else {
+                    // Name the instance so it can still be removed by hand.
+                    alert(`Could not remove the instance: ${data.error}\n\nIt may still be running as "${data.instanceName}". Remove it in Open Source Cloud if it is.`);
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
             }
         });
 

@@ -12,7 +12,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { Context, getPortsForInstance } from '@osaas/client-core';
-import { createEyevinnLiveEncodingInstance, getEyevinnLiveEncodingInstance } from '@osaas/client-services';
+import {
+  createEyevinnLiveEncodingInstance,
+  getEyevinnLiveEncodingInstance,
+  removeEyevinnLiveEncodingInstance
+} from '@osaas/client-services';
 import { publicStreamView } from './lib/public-stream-view.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -479,6 +483,52 @@ app.get('/api/stream/:streamId', (req, res) => {
     success: true,
     stream: publicStreamView(streamInfo)
   });
+});
+
+// Remove the Live Encoding instance this app created for a stream.
+//
+// Going live creates an instance on the deploying account and it keeps running,
+// and costing, until someone removes it. Stopping the encoder stops the encoding
+// process and leaves the instance up, so before this endpoint existed the only
+// way to stop the cost was to find the instance in Open Source Cloud and delete
+// it by hand (issue #3).
+//
+// The instance is removed directly rather than stopped first. Removing it ends
+// the encoder anyway, and a failed stop should not be able to block the removal.
+app.delete('/api/stream/:streamId', async (req, res) => {
+  const { streamId } = req.params;
+  const streamInfo = activeStreams.get(streamId);
+
+  if (!streamInfo) {
+    return res.status(404).json({ success: false, error: 'Stream not found' });
+  }
+
+  try {
+    const { available } = await checkInstanceAvailability(streamInfo.instanceName);
+
+    if (available) {
+      const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
+      await removeEyevinnLiveEncodingInstance(ctx, streamInfo.instanceName);
+      console.log(`Removed instance ${streamInfo.instanceName}`);
+    } else {
+      console.log(`Instance ${streamInfo.instanceName} was already gone`);
+    }
+
+    activeStreams.delete(streamId);
+    await saveStreams();
+
+    res.json({ success: true, instanceName: streamInfo.instanceName });
+  } catch (error) {
+    // The local record is kept on purpose. It is the only thing left that names
+    // an instance which is still running and still being charged for, and
+    // dropping it here would hide the exact cost this endpoint exists to end.
+    console.error(`Error removing instance ${streamInfo.instanceName}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      instanceName: streamInfo.instanceName
+    });
+  }
 });
 
 app.get('/watch/:streamId', (req, res) => {
