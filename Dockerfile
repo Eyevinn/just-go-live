@@ -15,15 +15,10 @@ RUN npm ci --omit=dev
 # Copy application code
 COPY . .
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# Change ownership of app and userdata directories
-RUN chown -R nodejs:nodejs /app /userdata
-
-# Switch to non-root user
-USER nodejs
+# Use the unprivileged user the base image already ships, rather than creating
+# one at a hard-coded uid that a future base image may have taken.
+RUN chown -R node:node /app /userdata
+USER node
 
 # Expose port
 EXPOSE 3000
