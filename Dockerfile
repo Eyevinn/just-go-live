@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Create app directory
 WORKDIR /app
@@ -10,7 +10,7 @@ RUN mkdir -p /userdata && chmod 755 /userdata
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy application code
 COPY . .
@@ -33,5 +33,6 @@ ENV NODE_ENV=production
 ENV DATA_DIR=/userdata
 ENV PORT=3000
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application. node directly, not npm: npm as PID 1 does not forward
+# SIGTERM to the server, so the container only stops on the kill timeout.
+CMD ["node", "server.js"]

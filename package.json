@@ -30,12 +30,12 @@
   "dependencies": {
     "express": "^4.18.2",
     "node-fetch": "^3.3.2",
-    "uuid": "^9.0.1",
+    "uuid": "^14.0.2",
     "@osaas/client-core": "^0.11.0",
     "@osaas/client-services": "^0.11.5"
   },
   "type": "module",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }
