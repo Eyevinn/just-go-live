@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { Context, getPortsForInstance } from '@osaas/client-core';
 import { createEyevinnLiveEncodingInstance, getEyevinnLiveEncodingInstance } from '@osaas/client-services';
+import { publicStreamView } from './lib/public-stream-view.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +39,11 @@ const STREAMS_FILE = path.join(DATA_DIR, 'streams.json');
 async function saveStreams() {
   try {
     const streamsData = Array.from(activeStreams.entries()).map(([key, value]) => {
-      // Remove non-serializable objects (ctx) before saving
+      // Keep the service access token out of the file on disk. `ctx` is no
+      // longer stored on a stream at all, but it stays in this destructure so
+      // that reintroducing it cannot silently write a personal access token
+      // into streams.json, and so that streams loaded from an older file that
+      // does contain one get it dropped on the next save.
       const { ctx, serviceAccessToken, ...serializable } = value;
       return [key, { 
         ...serializable, 
@@ -123,7 +128,6 @@ async function validateAndRecreateInstances() {
       
       // Recreate context and refresh service access token if needed
       const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
-      streamInfo.ctx = ctx;
       
       if (needsTokenRefresh(streamInfo.serviceAccessTokenCreated)) {
         try {
@@ -162,7 +166,6 @@ async function startEncoderForStream(streamInfo) {
     const sat = await ctx.getServiceAccessToken('eyevinn-live-encoding');
     streamInfo.serviceAccessToken = sat;
     streamInfo.serviceAccessTokenCreated = new Date();
-    streamInfo.ctx = ctx;
     console.log(`Refreshed service access token for ${streamInfo.instanceName} before starting encoder`);
   }
 
@@ -242,7 +245,6 @@ app.post('/api/go-live', async (req, res) => {
         const sat = await ctx.getServiceAccessToken('eyevinn-live-encoding');
         streamInfo.serviceAccessToken = sat;
         streamInfo.serviceAccessTokenCreated = new Date();
-        streamInfo.ctx = ctx;
         console.log(`Refreshed service access token for reused instance ${streamInfo.instanceName}`);
       }
       
@@ -312,7 +314,6 @@ app.post('/api/go-live', async (req, res) => {
       serviceUrl,
       status: 'created',
       createdAt: new Date(),
-      ctx,
       serviceAccessToken: sat,
       serviceAccessTokenCreated: new Date()
     };
@@ -355,7 +356,6 @@ app.post('/api/start-encoder/:streamId', async (req, res) => {
       const sat = await ctx.getServiceAccessToken('eyevinn-live-encoding');
       streamInfo.serviceAccessToken = sat;
       streamInfo.serviceAccessTokenCreated = new Date();
-      streamInfo.ctx = ctx;
       console.log(`Refreshed service access token for ${streamInfo.instanceName} before starting encoder`);
     }
 
@@ -441,7 +441,6 @@ app.post('/api/stop-encoder/:streamId', async (req, res) => {
       const sat = await ctx.getServiceAccessToken('eyevinn-live-encoding');
       streamInfo.serviceAccessToken = sat;
       streamInfo.serviceAccessTokenCreated = new Date();
-      streamInfo.ctx = ctx;
       console.log(`Refreshed service access token for ${streamInfo.instanceName} before stopping encoder`);
     }
 
@@ -478,7 +477,7 @@ app.get('/api/stream/:streamId', (req, res) => {
 
   res.json({
     success: true,
-    stream: streamInfo
+    stream: publicStreamView(streamInfo)
   });
 });
 
