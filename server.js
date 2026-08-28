@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { Context, getPortsForInstance } from '@osaas/client-core';
 import { createEyevinnLiveEncodingInstance, getEyevinnLiveEncodingInstance } from '@osaas/client-services';
+import { publicStreamView } from './lib/public-stream-view.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -465,24 +466,6 @@ app.post('/api/stop-encoder/:streamId', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
-// The only fields a viewer needs to play the stream.
-//
-// This endpoint is reachable without authentication, by design: the viewer link
-// is what a broadcaster hands to their audience, and watch.html fetches it on
-// load and again on every status poll. So build the response from an explicit
-// allowlist and never from the stored object, which also holds the service
-// access token, the RTMP stream key, and the ingest URL with that key in it.
-//
-// watch.html reads exactly hlsUrl and status. streamId is already in the URL the
-// caller used, so echoing it back tells them nothing they did not have.
-function publicStreamView(streamInfo) {
-  return {
-    streamId: streamInfo.streamId,
-    hlsUrl: streamInfo.hlsUrl,
-    status: streamInfo.status
-  };
-}
 
 app.get('/api/stream/:streamId', (req, res) => {
   const { streamId } = req.params;
