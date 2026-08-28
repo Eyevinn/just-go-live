@@ -45,8 +45,13 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
 
 3. **Set your OSC Access Token**:
    ```bash
-   export OSC_ACCESS_TOKEN=your_token_here
+   cp .env.example .env
+   # then put your token in .env
    ```
+
+   The token controls the account this app creates encoder instances on, so
+   treat it as a credential. `export OSC_ACCESS_TOKEN=...` on the command line
+   works too, but it leaves the token in your shell history.
 
 4. **Start the application**:
    ```bash
@@ -141,6 +146,28 @@ object from it.
 - **RTMP Input**: `rtmp://IP:PORT/live/STREAMKEY`
 - **HLS Output**: `https://instance-url/origin/hls/index.m3u8`
 - **Viewer Page**: `http://localhost:3000/watch/STREAM_ID`
+
+## Limitations
+
+Worth knowing before you put this anywhere other than your own machine.
+
+**The app has no authentication of its own.** Any request that reaches
+`POST /api/go-live` creates a Live Encoding instance on your account and starts
+costing tokens. The Docker instructions above publish port 3000 with nothing in
+front of it. If you expose the app beyond localhost, put a gate in front of it.
+
+**One broadcaster per deployment.** There is no notion of who is calling. Going
+live reuses the first stream that is free, so if two people use the same
+deployment they end up sharing one stream, one RTMP URL and one stream key.
+
+**Stream state is a file, not a database.** `streams.json` in `DATA_DIR` is the
+record of which encoder instances exist. Losing it loses the app's knowledge of
+instances that are still running on your account, and still being charged for.
+
+## Security
+
+See [SECURITY.md](SECURITY.md). Report vulnerabilities to security@eyevinn.se
+rather than in a public issue.
 
 ## Troubleshooting
 
