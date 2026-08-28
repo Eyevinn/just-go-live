@@ -18,7 +18,7 @@
 // Plain assertions and no test runner, matching test/public-stream-view.test.js.
 
 import assert from 'node:assert/strict';
-import { newStreamIdentity } from '../lib/stream-identity.js';
+import { newStreamIdentity, hasDerivedStreamKey } from '../lib/stream-identity.js';
 
 // A fixed id so the derivation this replaces is reproducible in the assertions.
 const STREAM_ID = '5f629f6a-7161-47fb-96c9-a8e2b1d40c37';
@@ -52,9 +52,32 @@ test('no slice of the stream id survives in the key', () => {
   }
 });
 
-test('the key has enough entropy to be unguessable', () => {
+test('the key is 32 hex characters', () => {
+  // Format only. That the 16 bytes come from a CSPRNG is enforced by reading
+  // randomBytes in lib/stream-identity.js, not by this assertion: an
+  // implementation returning a hash of the clock would pass every test here
+  // and still be predictable. The two checks above are what rule out the
+  // derivation this replaces.
   const { streamKey } = newStreamIdentity(STREAM_ID);
   assert.match(streamKey, /^key[0-9a-f]{32}$/);
+});
+
+test('a legacy stream is recognised so it is never reused', () => {
+  // The shape restored from streams.json on a deployment that ran the old code.
+  const legacy = { streamId: STREAM_ID, streamKey: `key${ID_HEX.substring(0, 12)}` };
+  assert.equal(hasDerivedStreamKey(legacy), true);
+});
+
+test('a stream created after the fix is not treated as legacy', () => {
+  const fresh = { streamId: STREAM_ID, ...newStreamIdentity(STREAM_ID) };
+  assert.equal(hasDerivedStreamKey(fresh), false);
+});
+
+test('a malformed record does not throw and is not treated as legacy', () => {
+  // streams.json is a file on disk and can be anything.
+  for (const bad of [null, undefined, {}, { streamId: STREAM_ID }, { streamKey: 'keyabc' }, { streamId: 5, streamKey: 'keyabc' }]) {
+    assert.equal(hasDerivedStreamKey(bad), false);
+  }
 });
 
 test('the instance name is still derived from the stream id', () => {
@@ -76,8 +99,5 @@ for (const [name, fn] of tests) {
   }
 }
 
-if (failed > 0) {
-  console.error(`\n${failed} of ${tests.length} tests failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} tests passed`);
+console.log(`\n${tests.length - failed}/${tests.length} passed`);
+process.exit(failed ? 1 : 0);
