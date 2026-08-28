@@ -14,6 +14,7 @@ import fs from 'fs/promises';
 import { Context, getPortsForInstance } from '@osaas/client-core';
 import { createEyevinnLiveEncodingInstance, getEyevinnLiveEncodingInstance } from '@osaas/client-services';
 import { publicStreamView } from './lib/public-stream-view.js';
+import { newStreamIdentity } from './lib/stream-identity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -267,14 +268,15 @@ app.post('/api/go-live', async (req, res) => {
 
     // No available instance, create a new one
     const streamId = uuidv4();
-    const instanceName = `live${streamId.replace(/-/g, '').substring(0, 8)}`;
-    const streamKey = `key${streamId.replace(/-/g, '').substring(0, 12)}`;
+    const { instanceName, streamKey } = newStreamIdentity(streamId);
 
     // Initialize the OSC context
     const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
 
     // Create the live encoding instance
-    console.log(`Creating new instance: ${instanceName} with stream key: ${streamKey}`);
+    // The stream key is a credential now that it is no longer derivable, so it
+    // stays out of the logs.
+    console.log(`Creating new instance: ${instanceName}`);
     const instanceConfig = {
       name: instanceName,
       HlsOnly: true,
