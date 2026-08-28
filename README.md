@@ -43,15 +43,18 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
    npm install
    ```
 
-3. **Set your OSC Access Token**:
+3. **Set your OSC Access Token**. The token controls the account this app creates
+   encoder instances on, so treat it as a credential.
+
    ```bash
-   cp .env.example .env
-   # then put your token in .env
+   read -rs OSC_ACCESS_TOKEN && export OSC_ACCESS_TOKEN
    ```
 
-   The token controls the account this app creates encoder instances on, so
-   treat it as a credential. `export OSC_ACCESS_TOKEN=...` on the command line
-   works too, but it leaves the token in your shell history.
+   `read -rs` keeps the token out of your shell history, which
+   `export OSC_ACCESS_TOKEN=...` does not. If you prefer a file, copy
+   `.env.example` to `.env` and load it yourself with `set -a; . ./.env; set +a`.
+   Nothing in the app reads `.env` on its own. Docker Compose does, so the
+   compose path below picks it up automatically.
 
 4. **Start the application**:
    ```bash
@@ -160,6 +163,12 @@ front of it. If you expose the app beyond localhost, put a gate in front of it.
 live reuses the first stream that is free, so if two people use the same
 deployment they end up sharing one stream, one RTMP URL and one stream key.
 
+**Nothing removes the encoder instance.** Every go-live that cannot reuse a free
+stream creates a Live Encoding instance on your account, and the app has no way
+to remove it. Stopping the encoder stops the encoding process inside the
+instance; the instance itself keeps running and keeps costing until you delete it
+in Open Source Cloud by hand. See issue #3.
+
 **Stream state is a file, not a database.** `streams.json` in `DATA_DIR` is the
 record of which encoder instances exist. Losing it loses the app's knowledge of
 instances that are still running on your account, and still being charged for.
@@ -172,7 +181,9 @@ rather than in a public issue.
 ## Troubleshooting
 
 1. **"OSC_ACCESS_TOKEN environment variable is required"**
-   - Make sure you've exported your OSC access token
+   - Make sure the variable is exported in the shell you start the app from.
+     Putting it in `.env` is not enough on its own: nothing in the app reads
+     that file. See step 3 of Setup.
 
 2. **"Failed to create instance"**
    - Check your OSC token is valid and you have access to Eyevinn Live Encoding service

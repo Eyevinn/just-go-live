@@ -10,3 +10,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # This repo's base image reached end of life unnoticed once. This is the
+  # control that stops it happening again.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
