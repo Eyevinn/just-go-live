@@ -14,6 +14,7 @@ import fs from 'fs/promises';
 import { Context, getPortsForInstance } from '@osaas/client-core';
 import { createEyevinnLiveEncodingInstance, getEyevinnLiveEncodingInstance } from '@osaas/client-services';
 import { publicStreamView } from './lib/public-stream-view.js';
+import { newStreamIdentity, hasDerivedStreamKey } from './lib/stream-identity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,15 @@ async function loadStreams() {
     console.log(`Loading ${streamsData.length} streams from disk...`);
     
     for (const [key, value] of streamsData) {
+      if (hasDerivedStreamKey(value)) {
+        // Kept, so the instance it names is not forgotten, but never reused.
+        value.keyIsDerived = true;
+        console.warn(
+          `Stream ${key} (instance ${value.instanceName}) was created with a stream key ` +
+          `derived from its public stream id. It will not be reused. Create a new stream, ` +
+          `and remove the old instance in Open Source Cloud.`
+        );
+      }
       activeStreams.set(key, value);
     }
     
@@ -151,6 +161,11 @@ async function validateAndRecreateInstances() {
 // Check if there's an available instance to reuse
 function findAvailableInstance() {
   for (const [streamId, streamInfo] of activeStreams.entries()) {
+    // Reusing one of these would hand the next broadcaster a key that anyone
+    // holding the old viewer link can compute.
+    if (streamInfo.keyIsDerived) {
+      continue;
+    }
     if (streamInfo.status === 'created' || streamInfo.status === 'stopped') {
       return { streamId, streamInfo };
     }
@@ -267,14 +282,15 @@ app.post('/api/go-live', async (req, res) => {
 
     // No available instance, create a new one
     const streamId = uuidv4();
-    const instanceName = `live${streamId.replace(/-/g, '').substring(0, 8)}`;
-    const streamKey = `key${streamId.replace(/-/g, '').substring(0, 12)}`;
+    const { instanceName, streamKey } = newStreamIdentity(streamId);
 
     // Initialize the OSC context
     const ctx = new Context({ personalAccessToken: OSC_ACCESS_TOKEN });
 
     // Create the live encoding instance
-    console.log(`Creating new instance: ${instanceName} with stream key: ${streamKey}`);
+    // The stream key is a credential now that it is no longer derivable, so it
+    // stays out of the logs.
+    console.log(`Creating new instance: ${instanceName}`);
     const instanceConfig = {
       name: instanceName,
       HlsOnly: true,
@@ -282,7 +298,9 @@ app.post('/api/go-live', async (req, res) => {
     };
 
     const instance = await createEyevinnLiveEncodingInstance(ctx, instanceConfig);
-    console.log('Instance created:', instance);
+    // Name and url only. The instance response schema declares StreamKey, so
+    // logging the object whole would put the key back in the logs.
+    console.log('Instance created:', instance.name, instance.url);
 
     const serviceUrl = instance.url;
     

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/public-stream-view.test.js"
+    "test": "node test/public-stream-view.test.js && node test/stream-identity.test.js"
   },
   "repository": {
     "type": "git",
