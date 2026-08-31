@@ -203,6 +203,35 @@ Licensed under the MIT License (see LICENSE file)
             background: rgba(255, 255, 255, 0.25);
             border-color: rgba(255, 255, 255, 0.5);
         }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .orphan-warning {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: left;
+            word-break: break-word;
+        }
+
+        .cost-note {
+            margin-bottom: 20px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.4);
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -219,7 +248,8 @@ Licensed under the MIT License (see LICENSE file)
 
         <div id="result" class="result">
             <h3>✅ Live Stream Ready!</h3>
-            <p style="margin-bottom: 20px; opacity: 0.9;">Your encoder is starting up and will be ready to accept streams shortly.</p>
+            <p style="margin-bottom: 12px; opacity: 0.9;">Your encoder is starting up and will be ready to accept streams shortly.</p>
+            <p class="cost-note">This created a Live Encoding instance in your Open Source Cloud account. It keeps running, and costing, until it is removed. Stopping the encoder is not enough. Use <strong>End stream and remove instance</strong> below when you are finished.</p>
             
             <div class="url-group">
                 <label>RTMP URL (paste this into OBS or your streaming software):</label>
@@ -237,14 +267,66 @@ Licensed under the MIT License (see LICENSE file)
             </div>
 
             <div class="controls">
-                <button id="stopEncoderBtn" class="control-btn stop">Stop Encoder</button>
+                <button id="stopEncoderBtn" class="control-btn">Stop Encoder</button>
+                <button id="removeInstanceBtn" class="control-btn stop">End stream and remove instance</button>
                 <button onclick="window.location.reload()" class="control-btn">Create New Stream</button>
             </div>
+
+            <div id="orphanWarning" class="orphan-warning"></div>
         </div>
     </div>
 
     <script>
-        let currentStreamId = null;
+        // Kept together because losing any one of them strands a billable
+        // instance: the id addresses it, the token authorises removing it, and
+        // the name is what the user needs to find it by hand if removal fails.
+        let currentStream = null;
+        const SESSION_KEY = 'justGoLive.currentStream';
+
+        // A plain reload, or the "Create New Stream" button, used to lose all
+        // three, leaving an instance running with no way back to it from the UI.
+        function rememberStream(stream) {
+            currentStream = stream;
+            try {
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify(stream));
+            } catch (error) {
+                // Private mode, storage disabled. The page still works for this
+                // session; only recovery after a reload is lost.
+                console.warn('Could not remember the stream for this session:', error);
+            }
+        }
+
+        function forgetStream() {
+            currentStream = null;
+            try {
+                sessionStorage.removeItem(SESSION_KEY);
+            } catch (error) {
+                console.warn('Could not clear the remembered stream:', error);
+            }
+        }
+
+        function restoreStream() {
+            try {
+                const raw = sessionStorage.getItem(SESSION_KEY);
+                if (!raw) return;
+                const stream = JSON.parse(raw);
+                if (!stream || !stream.streamId) return;
+                currentStream = stream;
+                document.getElementById('rtmpUrl').value = stream.rtmpUrl || '';
+                document.getElementById('viewerUrl').value = stream.viewerUrl || '';
+                document.getElementById('result').style.display = 'block';
+            } catch (error) {
+                console.warn('Could not restore the remembered stream:', error);
+            }
+        }
+
+        function showOrphanWarning(message) {
+            const el = document.getElementById('orphanWarning');
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+
+        window.addEventListener('load', restoreStream);
 
         document.getElementById('goLiveBtn').addEventListener('click', async () => {
             const btn = document.getElementById('goLiveBtn');
@@ -266,10 +348,17 @@ Licensed under the MIT License (see LICENSE file)
                 const data = await response.json();
 
                 if (data.success) {
-                    currentStreamId = data.streamId;
+                    rememberStream({
+                        streamId: data.streamId,
+                        manageToken: data.manageToken,
+                        instanceName: data.instanceName,
+                        rtmpUrl: data.rtmpUrl,
+                        viewerUrl: data.viewerUrl
+                    });
                     document.getElementById('rtmpUrl').value = data.rtmpUrl;
                     document.getElementById('viewerUrl').value = data.viewerUrl;
-                    
+                    document.getElementById('orphanWarning').style.display = 'none';
+
                     loading.style.display = 'none';
                     result.style.display = 'block';
                 } else {
@@ -284,16 +373,16 @@ Licensed under the MIT License (see LICENSE file)
         });
 
         function watchStream() {
-            if (currentStreamId) {
-                window.open(`/watch/${currentStreamId}`, '_blank');
+            if (currentStream) {
+                window.open(`/watch/${currentStream.streamId}`, '_blank');
             }
         }
 
         document.getElementById('stopEncoderBtn').addEventListener('click', async () => {
-            if (!currentStreamId) return;
-            
+            if (!currentStream) return;
+
             try {
-                const response = await fetch(`/api/stop-encoder/${currentStreamId}`, {
+                const response = await fetch(`/api/stop-encoder/${currentStream.streamId}`, {
                     method: 'POST'
                 });
                 
@@ -305,6 +394,76 @@ Licensed under the MIT License (see LICENSE file)
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
+            }
+        });
+
+        document.getElementById('removeInstanceBtn').addEventListener('click', async () => {
+            if (!currentStream) {
+                showOrphanWarning(
+                    'This page has no stream to remove. If you started one earlier, check the ' +
+                    'eyevinn-live-encoding service in Open Source Cloud for an instance that is ' +
+                    'still running.'
+                );
+                return;
+            }
+            if (!confirm('This removes the Live Encoding instance from your account and ends the stream. Continue?')) return;
+
+            const btn = document.getElementById('removeInstanceBtn');
+            const originalLabel = btn.textContent;
+            const { streamId, manageToken, instanceName } = currentStream;
+
+            btn.disabled = true;
+            btn.textContent = 'Removing...';
+
+            // Named here, not read from the response, so the message below still
+            // has it when the response is unreadable.
+            const named = instanceName || 'the instance created for this stream';
+
+            try {
+                const response = await fetch(`/api/stream/${streamId}`, {
+                    method: 'DELETE',
+                    headers: { 'x-manage-token': manageToken || '' }
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    // A proxy error page or a dropped connection. The outcome is
+                    // genuinely unknown, so do not let it read as a clean failure.
+                }
+
+                if (response.ok && data && data.success) {
+                    forgetStream();
+                    alert(data.outcome === 'already-gone'
+                        ? `That instance ("${data.instanceName}") was already gone. Nothing left to remove.`
+                        : `Instance "${data.instanceName}" removed. It is no longer costing anything.`);
+                    window.location.reload();
+                    return;
+                }
+
+                // The server's message may or may not end in punctuation, and this
+                // string is read by someone who has just been told their money
+                // might still be running.
+                const detail = data && data.error
+                    ? String(data.error).trim().replace(/([^.!?])$/, '$1.')
+                    : 'The server did not return a readable error.';
+
+                showOrphanWarning(
+                    `Could not remove the instance (HTTP ${response.status}). ${detail} ` +
+                    `It may still be running as "${(data && data.instanceName) || named}". ` +
+                    `Remove it in the eyevinn-live-encoding service in Open Source Cloud if it is.`
+                );
+            } catch (error) {
+                // fetch itself failed. The request may have reached the server.
+                showOrphanWarning(
+                    `The removal request failed: ${error.message}. The instance may or may not ` +
+                    `have been removed, and may still be costing money. Check for an instance ` +
+                    `named "${named}" in the eyevinn-live-encoding service in Open Source Cloud.`
+                );
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalLabel;
             }
         });
 

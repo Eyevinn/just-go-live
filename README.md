@@ -100,6 +100,12 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
 3. **Copy the RTMP URL** and paste it into your streaming software (OBS, etc.)
 4. **Click "Start Encoder"** to begin accepting the stream
 5. **Share the Viewer URL** with your audience
+6. **Click "End stream and remove instance"** when you are finished
+
+Going live creates a Live Encoding instance in your Open Source Cloud account. It
+keeps running, and costing, until it is removed. Stopping the encoder ends the
+encoding process but leaves the instance up, so step 6 is the one that ends the
+cost.
 
 ### For Viewers:
 
@@ -121,6 +127,9 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
 - `POST /api/start-encoder/:streamId` - Start the encoder
 - `POST /api/stop-encoder/:streamId` - Stop the encoder  
 - `GET /api/stream/:streamId` - Playback information for a stream: `streamId`, `hlsUrl`, `status`
+- `DELETE /api/stream/:streamId` - Remove the Live Encoding instance created for the stream.
+  Requires the `x-manage-token` header with the `manageToken` from the go-live response,
+  because the stream id itself is public and the removal cannot be undone
 - `GET /watch/:streamId` - Viewer page for stream
 
 The viewer link is public, and `GET /api/stream/:streamId` is the request the viewer

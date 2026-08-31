@@ -25,7 +25,8 @@ import { publicStreamView } from '../lib/public-stream-view.js';
 const CANARY = {
   pat: 'CANARY_personal_access_token',
   sat: 'CANARY_service_access_token',
-  streamKey: 'CANARY_stream_key'
+  streamKey: 'CANARY_stream_key',
+  manageToken: 'CANARY_manage_token'
 };
 
 // Shaped like the object server.js actually stores, including the fields that
@@ -42,6 +43,7 @@ function storedStream() {
     serviceUrl: 'https://example.osaas.io',
     status: 'encoding',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    manageToken: CANARY.manageToken,
     serviceAccessToken: CANARY.sat,
     serviceAccessTokenCreated: new Date('2026-01-01T00:00:00.000Z'),
     ctx: { personalAccessToken: CANARY.pat, environment: 'prod' }
