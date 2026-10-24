@@ -32,7 +32,7 @@ Deploy instantly without any setup - just click and start streaming. Perfect for
 ## Prerequisites
 
 1. **OSC Access Token**: You need an Eyevinn Open Source Cloud account and access token
-2. **Node.js**: Version 14+ installed
+2. **Node.js**: Version 24.22.1+ installed
 
 ## Setup
 
